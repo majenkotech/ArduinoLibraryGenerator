@@ -1,5 +1,52 @@
 <?php
 
+    $replacements = array();
+
+    // Generate a list of folders in the template
+    function gatherFolders($dir = "") {
+        $folders = array();
+        $fd = opendir("template/" . $dir);
+        while ($file = readdir($fd)) {
+            if (substr($file,0,1) == '.') {
+                continue;
+            }
+            if ($dir != "") {
+                $fn = $dir . "/" . $file;
+            } else {
+                $fn = $file;
+            }
+            if (is_dir("template/" . $fn)) {
+                $folders[] = $fn;
+                $descend = gatherFolders($fn);
+                $folders = array_merge($folders, $descend);
+            }
+        }
+        return $folders;
+    }
+   
+    // Gather a list of files in the template folder
+    function gatherFiles($dir = "") {
+        $files = array();
+        $fd = opendir("template/" . $dir);
+        while ($file = readdir($fd)) {
+            if (substr($file,0,1) == '.') {
+                continue;
+            }
+            if ($dir != "") {
+                $fn = $dir . "/" . $file;
+            } else {
+                $fn = $file;
+            }
+            if (is_dir("template/" . $fn)) {
+                $descend = gatherFiles($fn);
+                $files = array_merge($files, $descend);
+            } else {
+                $files[] = $fn;
+            }
+        }
+        return $files;
+    }
+
     // Generate a unique temporary file name for building the zip file
     function uniqueName() {
         $tmp = sys_get_temp_dir();
@@ -33,6 +80,15 @@
         return true;
     }
 
+    function stringReplacement($in) {
+        global $replacements;
+        $out = $in;
+        foreach ($replacements as $k => $v) {
+            $out = str_replace("%$k%", $v, $out);
+        }
+        return $out;
+    }
+
     // This will store a string for displaying errors if any
     $error = false;
 
@@ -44,75 +100,47 @@
         $license = $_POST['license'];
         $owner = $_POST['owner'];
 
-        // Just in case someone tries walking our filesystem, let's clean the license variable.
-        $license = str_replace("%", "", $license);
-        $license = str_replace(".", "", $license);
-        $license = str_replace("/", "", $license);
-        $license = str_replace("\\", "", $license);
-        $license = str_replace("&", "", $license);
-        $license = str_replace("?", "", $license);
-        $license = str_replace("*", "", $license);
-
-        // Load the license text from the right text file.
-        $licenseData = file_get_contents("licenses/$license.txt");
-        $licenseData = str_replace("%OWNER%", $owner, $licenseData);
-        $licenseData = str_replace("%YEAR%", date("Y"), $licenseData);
-        $licenseData = str_replace("%LIBRARY%", $lib, $licenseData);
-
         // Check the library name is valid, and report an error if not.
         if (!validName($lib)) {
             $error = "Name contains invalid characters.  Use only A-Z, a-z, 0-9 and _.  The name must not start with a number.";
         } else {
 
-            // This is the template header file.  It might be better to have this in a file loaded from the FS, but for
-            // now it's static in the code.
-            $header = $licenseData . "#ifndef _${libcap}_H
-#define _${libcap}_H
+            // Just in case someone tries walking our filesystem, let's clean the license variable.
+            $license = str_replace("%", "", $license);
+            $license = str_replace(".", "", $license);
+            $license = str_replace("/", "", $license);
+            $license = str_replace("\\", "", $license);
+            $license = str_replace("&", "", $license);
+            $license = str_replace("?", "", $license);
+            $license = str_replace("*", "", $license);
 
-#if (ARDUINO >= 100) 
-# include <Arduino.h>
-#else
-# include <WProgram.h>
-#endif
+            // Load the license text from the right text file.
+            $licenseData = file_get_contents("licenses/$license.txt");
 
-class ${lib} {
-    private:
-        // Private functions and variables here.  They can only be accessed
-        // by functions within the class.
+            $replacements['OWNER'] = $owner;
+            $replacements['LIBNAME'] = $lib;
+            $replacements['LIBCAP'] = $libcap;
+            $replacements['YEAR'] = $year;
+            $replacements['LICENSE'] = stringReplacement($licenseData);
 
-    public:
-        // Public functions and variables.  These can be accessed from
-        // outside the class.
-        ${lib}();
-        void begin();
-};
-#endif
-";
-
-        // Ditto with the .cpp file.
-        $code = $licenseData . "#include <${lib}.h>
-
-// This is a generic constructor.  Expand as needed.  Constructors
-// don't have a return type.
-${lib}::${lib}() {
-}
-
-// Initialize any hardware here, not in the constructor.  You cannot
-// guarantee the execution order of constructors, but you can guarantee
-// when the begin member function is executed.
-void ${lib}::begin() {
-}
-";
+            $folders = gatherFolders();
+            $files = gatherFiles();
 
             // And now we build it into a .ZIP file.
             $zip = new ZipArchive;
             $zn = uniqueName();
             $zip->open($zn, ZipArchive::CREATE);
-            $zip->addEmptyDir($lib);
-            $zip->addEmptyDir("$lib/examples");
-            $zip->addEmptyDir("$lib/utility");
-            $zip->addFromString("$lib/$lib.h", $header);
-            $zip->addFromString("$lib/$lib.cpp", $code);
+            foreach ($folders as $f) {
+                $f = stringReplacement($f);
+                $zip->addEmptyDir($f);
+            }
+
+            foreach ($files as $f) {
+                $data = file_get_contents("template/" . $f);
+                $data = stringReplacement($data);
+                $newfile = stringReplacement($f);
+                $zip->addFromString($newfile, $data);
+            }
             $zip->close();
         
             // This pushes the file out as an attachment - i.e., forces a download with a specific filename.
