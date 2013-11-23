@@ -1,0 +1,5 @@
+/*
+ * Copyright (c) %YEAR% %OWNER%
+ * All Rights Reserved.
+ */
+

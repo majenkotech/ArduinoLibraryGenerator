@@ -1,0 +1,21 @@
+html {
+    background-color: #FFFFFF;
+    margin: 0px;
+    padding: 0px;
+}
+
+body {
+    margin: 0px;
+    font-family: Arial, Helvetica, Sans-Serif;
+    font-size: 14px;
+    background-color: #FFFFFF;
+}
+
+h1 {
+    text-align: center;
+}
+
+span.error {
+    color: #FF0000;
+    font-weight: bold;
+}
