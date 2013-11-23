@@ -1,5 +1,17 @@
 <?php
 
+    $licenseTypes = array(
+        "none" => "None",
+        "apache2" => "Apache License 2.0",
+        "bsd3" => "BSD 3-Clause 'New' or 'Revised' license",
+        "bsd2" => "BSD 2-Clause 'Simplified' or 'FreeBSD' license",
+        "gpl2" => "GNU General Public License (GPL) Version 2.0",
+        "gpl3" => "GNU General Public License (GPL) Version 3.0",
+        "lgpl2" => "GNU Library or 'Lesser' General Public License (LGPL) Version 2.1",
+        "lgpl3" => "GNU Library or 'Lesser' General Public License (LGPL) Version 3.0",
+        "mit" => "MIT license"
+    );
+
     $replacements = array();
 
     // Generate a list of folders in the template
@@ -89,16 +101,26 @@
         return $out;
     }
 
+    // Clean up a filename to remove bad characters
+    function sanitize($in) {
+        $out = $in;
+        $bad = array('%','.','/','\\','&','?','*');
+        foreach ($bad as $c) {
+            $out = str_replace($c, '', $out);
+        }
+        return $out;
+    }
+
+
     // This will store a string for displaying errors if any
     $error = false;
 
     // If we have been passed a library name then we must be generating the library.
     if (array_key_exists("libname", $_POST)) {
-        $lib = $_POST['libname'];
-        $lib = trim($lib);
+        $lib = trim($_POST['libname']);
         $libcap = strtoupper($lib);
-        $license = $_POST['license'];
-        $owner = $_POST['owner'];
+        $license = trim($_POST['license']);
+        $owner = trim($_POST['owner']);
 
         // Check the library name is valid, and report an error if not.
         if (!validName($lib)) {
@@ -106,16 +128,13 @@
         } else {
 
             // Just in case someone tries walking our filesystem, let's clean the license variable.
-            $license = str_replace("%", "", $license);
-            $license = str_replace(".", "", $license);
-            $license = str_replace("/", "", $license);
-            $license = str_replace("\\", "", $license);
-            $license = str_replace("&", "", $license);
-            $license = str_replace("?", "", $license);
-            $license = str_replace("*", "", $license);
+            $license = sanitize($license);
 
+            $licenseData = "";
             // Load the license text from the right text file.
-            $licenseData = file_get_contents("licenses/$license.txt");
+            if (file_exists("licenses/$license.txt")) {
+                $licenseData = file_get_contents("licenses/$license.txt");
+            }
 
             $replacements['OWNER'] = $owner;
             $replacements['LIBNAME'] = $lib;
@@ -130,6 +149,7 @@
             $zip = new ZipArchive;
             $zn = uniqueName();
             $zip->open($zn, ZipArchive::CREATE);
+
             foreach ($folders as $f) {
                 $f = stringReplacement($f);
                 $zip->addEmptyDir($f);
@@ -141,6 +161,7 @@
                 $newfile = stringReplacement($f);
                 $zip->addFromString($newfile, $data);
             }
+
             $zip->close();
         
             // This pushes the file out as an attachment - i.e., forces a download with a specific filename.
@@ -177,17 +198,11 @@ member functions.</b><br/><br/>
 <b>Enter Library Name: </b><input type="text" name="libname" size="20" /> <br/>
 
 <b>Include license information: </b><select name="license">
-
-<option selected value="none">None</option>
-<option value="apache2">Apache License 2.0</option>
-<option value="bsd3">BSD 3-Clause "New" or "Revised" license</option>
-<option value="bsd2">BSD 2-Clause "Simplified" or "FreeBSD" license</option>
-<option value="gpl2">GNU General Public License (GPL) Version 2.0</option>
-<option value="gpl3">GNU General Public License (GPL) Version 3.0</option>
-<option value="lgpl2">GNU Library or "Lesser" General Public License (LGPL) Version 2.1</option>
-<option value="lgpl3">GNU Library or "Lesser" General Public License (LGPL) Version 3.0</option>
-<option value="mit">MIT license</option>
-
+<?php
+    foreach ($licenseTypes as $file => $name) {
+        print "<option value='$file'>$name</option>\n";
+    }
+?>
 </select><br/>
 
 <b>Your name (for the license): </b><input type="text" name="owner" size="20" /><br/>
